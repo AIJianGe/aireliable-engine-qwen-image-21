@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Qwen-Image2.1 · 三模式工作台</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">Q</span>
+      <div>
+        <div class="title">Qwen-Image2.1</div>
+        <div class="subtitle" id="hw-badge">检测硬件中…</div>
+      </div>
+    </div>
+    <div class="controls">
+      <label>模型档位
+        <select id="variant-select"></select>
+      </label>
+      <span class="scheme-badge-wrap" title="精度档由所选模型自动决定，无需手动选择（任务 51 · 方案 A）">
+        <span class="scheme-badge-label">精度档</span>
+        <span id="scheme-badge" class="scheme-badge">—</span>
+      </span>
+      <button id="load-btn" class="ghost">加载</button>
+      <span id="state-dot" class="dot"></span>
+      <span id="state-text">未知</span>
+    </div>
+  </header>
+
+  <nav class="modes" id="mode-tabs">
+    <button class="mode-tab active" data-mode="t2i">文生图</button>
+    <button class="mode-tab" data-mode="i2i">图生图</button>
+    <button class="mode-tab" data-mode="edit">图像编辑</button>
+    <span class="mode-tip" id="mode-tip"></span>
+  </nav>
+
+  <main class="grid">
+    <!-- ===== 左区：按模式自适应 ===== -->
+    <section class="panel">
+      <!-- 输入图区（i2i / edit） -->
+      <div id="image-block" class="block" hidden>
+        <h3 id="image-title">参考图</h3>
+        <div class="dropzone" id="dropzone">
+          <span>拖拽图片到此处 · 或 Ctrl+V 粘贴 · 或点击选择</span>
+        </div>
+        <input type="file" id="file-input" accept="image/*" multiple hidden />
+        <div class="thumbs" id="thumbs"></div>
+        <div class="hint" id="image-hint"></div>
+      </div>
+
+      <!-- 局部编辑（仅 edit） -->
+      <div id="mask-block" class="block" hidden>
+        <h3>局部编辑</h3>
+        <div class="row">
+          <label>方式
+            <select id="local-mode">
+              <option value="none">整图编辑（不指定区域）</option>
+              <option value="paint">圈选合成（把标记画进图）</option>
+              <option value="mask">独立蒙版（原图 + 蒙版两张）</option>
+            </select>
+          </label>
+          <label class="swatch-label">颜色
+            <span class="swatches" id="swatches"></span>
+          </label>
+          <button class="ghost" id="undo-btn">撤销</button>
+          <button class="ghost" id="clear-btn">清空</button>
+        </div>
+        <canvas id="mask-canvas"></canvas>
+        <div class="hint" id="mask-hint">
+          在图上拖拽画出圆形标记，提示词用颜色指代（如「蓝色圈内的手表去掉，红色圈的头发改成黑色」）。
+          区域由模型按视觉理解，不保证区域外像素逐位不变。
+        </div>
+      </div>
+
+      <!-- 扩图（仅 edit 模式，任务 56） -->
+      <div id="expand-block" class="block" hidden>
+        <h3>扩图（Outpaint）</h3>
+        <div class="row">
+          <label class="chk"><input type="checkbox" id="expand-on" /> 启用扩图</label>
+          <label>方向
+            <select id="expand-dir">
+              <option value="right">向右扩</option>
+              <option value="left">向左扩</option>
+              <option value="up">向上扩</option>
+              <option value="down">向下扩</option>
+              <option value="all">四周扩</option>
+            </select>
+          </label>
+          <label>扩幅(px) <input id="expand-amt" type="number" value="320" min="32" max="1024" step="32" /></label>
+        </div>
+        <div class="hint" id="expand-hint">
+          扩图 = 先把画布按方向做大（待补区域用源图边缘色填充），再让模型补全空白区。
+          实测：这样原图区域基本原样保留（差异 &lt;7/255、无接缝）；而"只改输出尺寸"会让模型整幅重绘。
+        </div>
+      </div>
+
+      <!-- 提示词 -->
+      <h3>提示词</h3>
+      <textarea id="prompt" rows="6" placeholder="描述你想生成 / 修改的内容…（支持中文）"></textarea>
+      <textarea id="negative" rows="2" placeholder="负向提示词（true_cfg_scale &gt; 1 时才生效）"></textarea>
+
+      <!-- 尺寸 -->
+      <div class="row" id="size-row">
+        <label>宽度 <input id="width" type="number" value="1024" min="256" max="2048" step="32" /></label>
+        <label>高度 <input id="height" type="number" value="1024" min="256" max="2048" step="32" /></label>
+        <label class="chk" id="follow-lbl">
+          <input type="checkbox" id="follow-size" checked /> <span id="follow-text">跟随参考 / 源图尺寸</span>
+        </label>
+      </div>
+      <div class="row" id="ratio-row"></div>
+      <div class="hint" id="size-hint"></div>
+
+      <!-- 生成参数 -->
+      <div class="row">
+        <label>步数 <input id="steps" type="number" value="40" min="1" max="100" /></label>
+        <label>CFG <input id="cfg" type="number" value="1.0" min="0" max="20" step="0.1" /></label>
+        <label>种子 <input id="seed" type="number" placeholder="留空随机" /></label>
+      </div>
+      <!-- 任务 54：档位联动默认值提示（独立于 #hint，不受 clearFeedback 清空） -->
+      <div class="hint" id="tier-hint"></div>
+      <div class="row">
+        <label class="chk" id="transparent-lbl"><input type="checkbox" id="transparent" /> 透明背景（RGBA）</label>
+        <button id="gen-btn" class="primary">生成</button>
+      </div>
+      <div class="hint" id="hint"></div>
+    </section>
+
+    <!-- ===== 右区：预览 + 历史（三模式共用） ===== -->
+    <section class="panel">
+      <h3>结果预览</h3>
+      <div class="preview" id="preview">
+        <div class="empty">尚未生成</div>
+      </div>
+      <div id="compare" hidden>
+        <div class="cmp-wrap">
+          <img id="cmp-before" alt="before" />
+          <img id="cmp-after" alt="after" />
+          <div class="cmp-line" id="cmp-line"></div>
+        </div>
+        <input type="range" id="cmp-range" min="0" max="100" value="50" />
+      </div>
+      <div class="progress-wrap"><div class="progress" id="progress"></div></div>
+      <div class="hint" id="stage"></div>
+      <div class="row">
+        <button class="ghost" id="reuse-btn" hidden>以此图继续编辑</button>
+        <button class="ghost" id="download-btn" hidden>下载</button>
+      </div>
+      <h3>历史</h3>
+      <div class="history" id="history"></div>
+    </section>
+  </main>
+
+  <!-- 任务 56-V2：静态资源带版本号 —— 浏览器会把同名 app.js 存进内存缓存
+       （实测 transferSize=0，改了 app.js 后页面仍跑旧代码），加 ?v= 强制取新文件。
+       改动 app.js / style.css 时**必须同步递进该版本号**。 -->
+  <script src="app.js?v=56v3"></script>
+</body>
+</html>

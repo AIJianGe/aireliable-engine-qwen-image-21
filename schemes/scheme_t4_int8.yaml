@@ -1,0 +1,29 @@
+# ============================================================
+# T4 INT8 DiT + INT8 编码器（二期，最后做；不用 ComfyUI）
+# ------------------------------------------------------------
+# 4a：torchao 运行时量化（未装 torchao 时注册表标记 available=false）
+# 4b：comfy-kitchen 反量化 Comfy-Org int8_convrot 单文件（二期）
+# 本引擎不启动 ComfyUI 服务，仅借鉴其量化实现库。
+# ============================================================
+scheme: t4_int8
+name: "T4 INT8 DiT + INT8 编码器（二期）"
+description: >-
+  INT8 是 Turing 原生加速赛道（torch._int_mm 可用）。4a 用 torchao 运行时量化
+  （项目内 ltx25 方案 I8 已在 sm_75 前向验证）；4b 用 comfy-kitchen 直接加载
+  Comfy-Org int8_convrot 单文件。为二期功能。
+default: false
+vram_required: "18GB"
+
+quantization:
+  backend_type: int8
+  dit_dtype: int8
+  compute_dtype: fp16
+  encoder_dtype: int8
+  vae_dtype: fp32
+
+inference:
+  steps: 40
+  guidance: 1.0
+
+applicable_variants:
+  - qwen-image-21-official-int8

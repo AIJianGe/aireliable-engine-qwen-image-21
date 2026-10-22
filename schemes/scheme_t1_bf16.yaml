@@ -1,0 +1,28 @@
+# ============================================================
+# T1 官方 BF16 全精度（运行时自适应 fp16/fp32）
+# ------------------------------------------------------------
+# 不量化：官方 safetensors 走 from_pretrained/from_single_file，
+# torch_dtype 由 DtypeResolver 按显卡实时决定。
+#   - Turing sm_75 无 bf16 张量核 → 请求 bf16 自动降 fp16（溢出则 fp32）
+# ============================================================
+scheme: t1_bf16
+name: "T1 官方 BF16 全精度（运行时自适应 fp16/fp32）"
+description: >-
+  官方 safetensors 全精度（DiT + 编码器 + VAE 共 ~30.8GB）。本机 Turing 无 bf16
+  张量核，运行时由 DtypeResolver 降为 fp16（若 fp16 溢出则 fp32）。画质对照基线。
+default: false
+vram_required: "31GB"      # 任务 55 校准：实测 /status.vram_used ≈ 30.9GB（原 34GB 高估）
+
+quantization:
+  backend_type: safetensors
+  dit_dtype: bf16
+  compute_dtype: auto        # 交 DtypeResolver 决定（bf16 → fp16/fp32）
+  encoder_dtype: bf16        # 权重 bf16 → 计算 fp16
+  vae_dtype: fp32
+
+inference:
+  steps: 40
+  guidance: 1.0
+
+applicable_variants:
+  - qwen-image-21-official-bf16

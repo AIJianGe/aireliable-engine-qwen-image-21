@@ -1,0 +1,524 @@
+# ============================================================
+# Qwen-Image-2.1 图像生成引擎 manifest（engine_id: qwen_image_21_feeb8130）
+# ------------------------------------------------------------
+# 范式：integrated（全自定义模式，继承 CustomEngine）——
+#   4 档精度 T1–T4 由 precision/（SchemeRegistry + DtypeResolver + SchemeManager）
+#   + factory.py（BackendFactory）+ backends/ 统一管理，运行时按显卡自适应 dtype。
+#
+# 支持 4 档精度模式（见 ANALYSIS-TASKS/48-QwenImage2.1图像生成引擎/）：
+#   T1 官方 BF16 全精度  → scheme t1_bf16（运行时降 fp16/fp32）
+#   T2 GGUF Q8_0（★主力）→ scheme t2_gguf_q8（compute=fp32）
+#   T3 GGUF Q4_K_M       → scheme t3_gguf_q4
+#   T4 INT8 DiT + INT8 编码器 → scheme t4_int8（二期，不用 ComfyUI）
+#
+# 模型目录布局（与 layout.py + pipeline_builder.py 一致）：
+#   models/image/qwen-image-2.1/
+#     ├── official/qwen-image-2.1-bf16.safetensors        # T1 DiT
+#     ├── transformers/qwen-image-2.1-Q8_0.gguf           # T2 DiT（★）
+#     ├── transformers/qwen-image-2.1-Q4_K_M.gguf         # T3 DiT
+#     ├── transformers/qwen-image-2.1-turbo-Q8_0.gguf     # Turbo DiT
+#     ├── transformers/qwen-image-2.1-uncensored-Q8_0.gguf# 越狱 DiT
+#     ├── transformers/qwen-image-2.1-int8_convrot.safetensors  # T4 DiT（二期）
+#     ├── text_encoder/                                   # Qwen3-VL 8B（bf16 4 shards + config，运行时 cast fp16）
+#     ├── vae/                                            # RGBA VAE（qwen_image_2.1_vae_bf16）
+#     ├── tokenizers/                                     # Qwen tokenizer
+#     ├── processor/                                      # Qwen3VL processor（二期 edit）
+#     ├── scheduler/scheduler_config.json
+#     └── loras/
+#
+# ⚠️ 用户视频含"越狱（uncensored）"路线：本质为官方权重 GGUF 重打包，按普通 variant
+#    处理（差异仅下载仓库 + 命名），UI 单列明示。
+# ⚠️ 许可证：Qwen-Image-2.1 采用 Qwen Research License（仅非商用）。
+# ============================================================
+
+# ===== v0.1 必需字段 =====
+engine_id: qwen_image_21_feeb8130
+engine_name: Qwen-Image2.1
+engine_version: 0.1.0
+aireliable_compat: ">=0.0.16"
+uv_env_name: image-qwen-image-21
+export_mode: source
+
+# ===== v0.1 可选字段 =====
+description: >-
+  Qwen-Image-2.1 图像生成引擎（integrated 全自定义范式）：文生图，支持 4 档精度模式
+  （T1 官方 BF16 全精度 / T2 GGUF Q8_0 ★主力 / T3 GGUF Q4_K_M / T4 INT8），
+  运行时按显卡实时自适应 dtype（Turing sm_75 无 bf16 张量核 → bf16 自动降 fp16/fp32）。
+  采用工厂 + 策略 + 注册表架构保证档位切换不乱。原生 2K 输出，RGBA 透明通道（VAE 4 通道）。
+
+# ===== v0.2 新增字段 =====
+engine_uid: aireliable://aijiangge/qwen_image/21
+paradigm: integrated
+sdk_version: ">=0.3.0"
+
+author:
+  name: AI剑歌
+  license: Apache-2.0        # 引擎封装代码协议（模型权重为 Qwen Research License，见下）
+
+third_party_references:
+  - name: Qwen-Image-2.1
+    author: Qwen Team
+    github: https://github.com/QwenLM/Qwen-Image
+    website: https://huggingface.co/Qwen/Qwen-Image-2.1
+    license: Qwen Research License
+    description: 主 transformer（QwenImage21Transformer2DModel）+ Qwen3-VL 编码器 + RGBA VAE 来源
+  - name: Comfy-Org Qwen-Image-2.1
+    author: Comfy-Org
+    website: https://huggingface.co/Comfy-Org/Qwen-Image-2.1
+    license: Qwen Research License
+    description: bf16 / int8_convrot 单文件权重（T1/T4）；int8_convrot 由 ComfyUI v0.27.0 引入（Turing 支持）
+  - name: Qwen-Image-2.1-GGUF
+    author: Unsloth
+    website: https://huggingface.co/unsloth
+    license: Qwen Research License
+    description: DiT GGUF Q8_0 / Q4_K_M 量化版（T2/T3）
+  - name: comfy-kitchen
+    author: Comfy-Org
+    website: https://pypi.org/project/comfy-kitchen/
+    license: Apache-2.0
+    description: ComfyUI 抽出的独立量化库（int8 convrot / w4a8），T4 二期反量化加载用（不启动 ComfyUI 服务）
+  - name: torchao
+    author: PyTorch
+    website: https://github.com/pytorch/ao
+    license: BSD-3-Clause
+    description: INT8 运行时量化（T4 4a），项目内 ltx25 方案 I8 已在 sm_75 验证
+
+source:
+  type: github
+  github_repo: QwenLM/Qwen-Image
+  branch: main
+
+upgrade:
+  check_url: https://api.github.com/repos/QwenLM/Qwen-Image/releases/latest
+  auto_check: false
+
+node_packages: []
+
+# ============================================================
+# 引擎环境配置（EngineEnvManager 读取）
+# 本机实测：Quadro RTX 8000 48GB（Turing sm_75），torch 2.11.0+cu128，diffusers 0.41.0
+# ============================================================
+env_config:
+  requires_torch: true
+  torch_version_constraint: '>=2.5.0'
+  default_cuda_version: cu128
+  supported_cuda_versions:
+    - cu121
+    - cu124
+    - cu126
+    - cu128
+  requires_python: '>=3.10,<3.13'
+  notes: >-
+    Qwen-Image-2.1 基于 torch + diffusers>=0.41（QwenImage21Pipeline，本机实测 0.41.0）
+    + transformers>=4.56（Qwen3-VL，本机实测 5.19.0）；Turing 无 bf16 张量核 →
+    DtypeResolver 运行时降 fp16/fp32；GGUF 档 compute 强制 fp32。48GB 显存 T2(Q8) 常驻约 27GB。
+  recommended_versions:
+    torch: '2.11.0'
+    torchvision: '0.26.0'
+    torchaudio: null
+    reason: '本机 Quadro RTX 8000（sm_75）验证通过的版本组合（diffusers 0.41.0 / transformers 5.19.0）'
+  cpu_offload:
+    supported: true
+    default_level: auto
+    levels:
+      L0:
+        name: "全 GPU"
+        description: "共享组件 + 单档 DiT + Qwen3-VL 编码器（fp16 ~17.5GB）常驻 GPU"
+        min_vram_gb: 40
+      L1:
+        name: "编码器驻 CPU"
+        description: "Qwen3-VL 编码器驻 CPU 内存，DiT+VAE 常驻 GPU（显存紧张兜底，编码每次 +几秒）"
+        min_vram_gb: 20
+
+# ============================================================
+# models 块（v0.2.1 强制）
+# ============================================================
+models:
+  model_layout:
+    base: image/qwen-image-2.1/
+    lora: image/qwen-image-2.1/loras/
+
+  # 默认 variant（用户未显式指定时的 auto-load 档）
+  default_variant: qwen-image-21-official-gguf-q8
+
+  # ===== 变体（一期 5 档 + 二期 1 档）=====
+  variants:
+    - name: qwen-image-21-official-bf16       # T1 全精度对照
+      alias: Qwen-Image2.1-FP
+      base_model: Qwen/Qwen-Image-2.1
+      precision: bf16
+      loader: diffusers
+      # 实测口径（任务 55）：/status.vram_used = memory_allocated ≈ 30.9GB（原声明 34GB 高估）
+      vram_required: 31GB
+      path: image/qwen-image-2.1/official/qwen-image-2.1-bf16.safetensors
+      model_file_ids:
+        [qi21-dit-bf16, qi21-te-config, qi21-te-index, qi21-te-shard1, qi21-te-shard2,
+         qi21-te-shard3, qi21-te-shard4, qi21-vae, qi21-vae-config,
+         qi21-tok-vocab, qi21-tok-merges, qi21-tok-config, qi21-tok-special, qi21-tok-json, qi21-tok-added, qi21-proc-pre, qi21-proc-video, qi21-proc-chat,
+         qi21-scheduler]
+    - name: qwen-image-21-official-gguf-q8     # ★ T2 默认主力
+      alias: Qwen-Image2.1-Q8
+      base_model: Qwen/Qwen-Image-2.1
+      precision: q8_0
+      loader: gguf
+      # 实测口径（任务 55）：≈25.0GB（D 实测跟踪值，原声明 20GB 低估）
+      vram_required: 25GB
+      path: image/qwen-image-2.1/transformers/qwen-image-2.1-Q8_0.gguf
+      model_file_ids:
+        [qi21-dit-q8, qi21-te-config, qi21-te-index, qi21-te-shard1, qi21-te-shard2,
+         qi21-te-shard3, qi21-te-shard4, qi21-vae, qi21-vae-config,
+         qi21-tok-vocab, qi21-tok-merges, qi21-tok-config, qi21-tok-special, qi21-tok-json, qi21-tok-added, qi21-proc-pre, qi21-proc-video, qi21-proc-chat,
+         qi21-scheduler]
+    - name: qwen-image-21-official-gguf-q4     # T3 低配/极速
+      alias: Qwen-Image2.1-Q4
+      base_model: Qwen/Qwen-Image-2.1
+      precision: q4_k_m
+      loader: gguf
+      # 实测口径（任务 55）：≈21.7GB（编码器 fp16 常驻占大头，原声明 12GB 低估）
+      vram_required: 22GB
+      path: image/qwen-image-2.1/transformers/qwen-image-2.1-Q4_K_M.gguf
+      model_file_ids:
+        [qi21-dit-q4, qi21-te-config, qi21-te-index, qi21-te-shard1, qi21-te-shard2,
+         qi21-te-shard3, qi21-te-shard4, qi21-vae, qi21-vae-config,
+         qi21-tok-vocab, qi21-tok-merges, qi21-tok-config, qi21-tok-special, qi21-tok-json, qi21-tok-added, qi21-proc-pre, qi21-proc-video, qi21-proc-chat,
+         qi21-scheduler]
+    - name: qwen-image-21-turbo-gguf-q8        # Turbo（8 步契约）
+      alias: Qwen-Image2.1-Turbo
+      base_model: Qwen/Qwen-Image-2.1-Turbo
+      precision: q8_0
+      loader: gguf
+      # 实测口径（任务 55）：与 T2 同结构（同编码器 + Q8_0 DiT）→ 与 T2 同口径
+      vram_required: 25GB
+      path: image/qwen-image-2.1/transformers/qwen-image-2.1-turbo-Q8_0.gguf
+      model_file_ids:
+        [qi21-dit-turbo-q8, qi21-te-config, qi21-te-index, qi21-te-shard1, qi21-te-shard2,
+         qi21-te-shard3, qi21-te-shard4, qi21-vae, qi21-vae-config,
+         qi21-tok-vocab, qi21-tok-merges, qi21-tok-config, qi21-tok-special, qi21-tok-json, qi21-tok-added, qi21-proc-pre, qi21-proc-video, qi21-proc-chat,
+         qi21-scheduler]
+    - name: qwen-image-21-uncensored-gguf-q8   # 越狱档（UI 单列 + 明示）
+      alias: Qwen-Image2.1-UC
+      base_model: KasugaiSakura/Qwen-Image-2.1-Uncensored-Abenzerps-GGUF
+      precision: q8_0
+      loader: gguf
+      # 实测口径（任务 55）：与 T2 同结构（同编码器 + Q8_0 DiT）→ 与 T2 同口径
+      vram_required: 25GB
+      path: image/qwen-image-2.1/transformers/qwen-image-2.1-uncensored-Q8_0.gguf
+      model_file_ids:
+        [qi21-dit-uncensored-q8, qi21-te-config, qi21-te-index, qi21-te-shard1, qi21-te-shard2,
+         qi21-te-shard3, qi21-te-shard4, qi21-vae, qi21-vae-config,
+         qi21-tok-vocab, qi21-tok-merges, qi21-tok-config, qi21-tok-special, qi21-tok-json, qi21-tok-added, qi21-proc-pre, qi21-proc-video, qi21-proc-chat,
+         qi21-scheduler]
+    - name: qwen-image-21-official-int8        # T4 INT8（二期）
+      alias: Qwen-Image2.1-INT8
+      base_model: Comfy-Org/Qwen-Image-2.1
+      precision: int8
+      loader: int8
+      vram_required: 18GB
+      path: image/qwen-image-2.1/transformers/qwen-image-2.1-int8_convrot.safetensors
+      model_file_ids:
+        [qi21-dit-int8, qi21-te-config, qi21-te-index, qi21-te-shard1, qi21-te-shard2,
+         qi21-te-shard3, qi21-te-shard4, qi21-vae, qi21-vae-config,
+         qi21-tok-vocab, qi21-tok-merges, qi21-tok-config, qi21-tok-special, qi21-tok-json, qi21-tok-added, qi21-proc-pre, qi21-proc-video, qi21-proc-chat,
+         qi21-scheduler]
+
+  # ===== 模型文件清单（size 为估值，精确值待 Q5 核实）=====
+  model_files:
+    # ---- DiT（各档互斥）----
+    - id: qi21-dit-bf16
+      role: main
+      exclusive_group: transformer
+      filename: qwen-image-2.1-bf16.safetensors
+      target_dir: image/qwen-image-2.1/official/
+      size_bytes: 14230000000
+      precision: bf16
+      format: safetensors
+      source:
+        type: huggingface
+        repo_id: Comfy-Org/Qwen-Image-2.1
+        filename: diffusion_models/qwen_image_2.1_bf16.safetensors
+        url: https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_bf16.safetensors
+        mirror_url: https://hf-mirror.com/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_bf16.safetensors
+      description: "Qwen-Image-2.1 主 DiT BF16 单文件（T1 全精度）"
+    - id: qi21-dit-q8
+      role: main
+      exclusive_group: transformer
+      filename: qwen-image-2.1-Q8_0.gguf
+      target_dir: image/qwen-image-2.1/transformers/
+      size_bytes: 7600000000
+      precision: q8_0
+      format: gguf
+      source:
+        type: huggingface
+        repo_id: unsloth/Qwen-Image-2.1-GGUF
+        filename: qwen-image-2.1-Q8_0.gguf
+        url: https://huggingface.co/unsloth/Qwen-Image-2.1-GGUF/resolve/main/qwen-image-2.1-Q8_0.gguf
+        mirror_url: https://hf-mirror.com/unsloth/Qwen-Image-2.1-GGUF/resolve/main/qwen-image-2.1-Q8_0.gguf
+      description: "Qwen-Image-2.1 主 DiT GGUF Q8_0（T2 主力）"
+    - id: qi21-dit-q4
+      role: main
+      exclusive_group: transformer
+      filename: qwen-image-2.1-Q4_K_M.gguf
+      target_dir: image/qwen-image-2.1/transformers/
+      size_bytes: 4199565024          # R11 修复：实测真实大小 4.20GB（原 4600000000 高估 8.7%，
+                                      # 超出 ModelFileChecker 1% 容差 → 平台误判 available=false）
+      precision: q4_k_m
+      format: gguf
+      source:
+        type: huggingface
+        repo_id: unsloth/Qwen-Image-2.1-GGUF
+        filename: qwen-image-2.1-Q4_K_M.gguf
+        url: https://huggingface.co/unsloth/Qwen-Image-2.1-GGUF/resolve/main/qwen-image-2.1-Q4_K_M.gguf
+        mirror_url: https://hf-mirror.com/unsloth/Qwen-Image-2.1-GGUF/resolve/main/qwen-image-2.1-Q4_K_M.gguf
+      description: "Qwen-Image-2.1 主 DiT GGUF Q4_K_M（T3 低配）"
+    - id: qi21-dit-turbo-q8
+      role: main
+      exclusive_group: transformer
+      filename: qwen-image-2.1-turbo-Q8_0.gguf
+      target_dir: image/qwen-image-2.1/transformers/
+      size_bytes: 7600000000
+      precision: q8_0
+      format: gguf
+      source:
+        type: huggingface
+        repo_id: unsloth/Qwen-Image-2.1-Turbo-GGUF
+        filename: qwen-image-2.1-turbo-Q8_0.gguf
+        url: https://huggingface.co/unsloth/Qwen-Image-2.1-Turbo-GGUF/resolve/main/qwen-image-2.1-turbo-Q8_0.gguf
+        mirror_url: https://hf-mirror.com/unsloth/Qwen-Image-2.1-Turbo-GGUF/resolve/main/qwen-image-2.1-turbo-Q8_0.gguf
+      description: "Qwen-Image-2.1-Turbo 主 DiT GGUF Q8_0（8 步蒸馏档）"
+    - id: qi21-dit-uncensored-q8
+      role: main
+      exclusive_group: transformer
+      filename: qwen-image-2.1-uncensored-Q8_0.gguf
+      target_dir: image/qwen-image-2.1/transformers/
+      size_bytes: 7590000000
+      precision: q8_0
+      format: gguf
+      source:
+        type: huggingface
+        repo_id: KasugaiSakura/Qwen-Image-2.1-Uncensored-Abenzerps-GGUF
+        filename: qwen-image-2.1-uncensored-Q8_0.gguf
+        url: https://huggingface.co/KasugaiSakura/Qwen-Image-2.1-Uncensored-Abenzerps-GGUF/resolve/main/qwen-image-2.1-uncensored-Q8_0.gguf
+        mirror_url: https://hf-mirror.com/KasugaiSakura/Qwen-Image-2.1-Uncensored-Abenzerps-GGUF/resolve/main/qwen-image-2.1-uncensored-Q8_0.gguf
+      description: "越狱档主 DiT GGUF Q8_0（社区重打包，UI 单列明示）"
+    - id: qi21-dit-int8
+      role: main
+      exclusive_group: transformer
+      filename: qwen-image-2.1-int8_convrot.safetensors
+      target_dir: image/qwen-image-2.1/transformers/
+      size_bytes: 6760000000
+      precision: int8
+      format: safetensors
+      source:
+        type: huggingface
+        repo_id: Comfy-Org/Qwen-Image-2.1
+        filename: diffusion_models/qwen_image_2.1_int8_convrot.safetensors
+        url: https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors
+        mirror_url: https://hf-mirror.com/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors
+      description: "Qwen-Image-2.1 主 DiT INT8(convrot) 单文件（T4，二期）"
+    # ---- Qwen3-VL 8B 编码器（共享一份，bf16 4 shards）----
+    - id: qi21-te-config
+      role: text_encoder
+      filename: config.json
+      target_dir: image/qwen-image-2.1/text_encoder/
+      source:
+        type: huggingface
+        repo_id: Qwen/Qwen-Image-2.1
+        filename: text_encoder/config.json
+        url: https://huggingface.co/Qwen/Qwen-Image-2.1/resolve/main/text_encoder/config.json
+        mirror_url: https://hf-mirror.com/Qwen/Qwen-Image-2.1/resolve/main/text_encoder/config.json
+    - id: qi21-te-index
+      role: text_encoder
+      filename: model.safetensors.index.json
+      target_dir: image/qwen-image-2.1/text_encoder/
+      source:
+        type: huggingface
+        repo_id: Qwen/Qwen-Image-2.1
+        filename: text_encoder/model.safetensors.index.json
+        url: https://huggingface.co/Qwen/Qwen-Image-2.1/resolve/main/text_encoder/model.safetensors.index.json
+        mirror_url: https://hf-mirror.com/Qwen/Qwen-Image-2.1/resolve/main/text_encoder/model.safetensors.index.json
+    - id: qi21-te-shard1
+      role: text_encoder
+      filename: model-00001-of-00004.safetensors
+      target_dir: image/qwen-image-2.1/text_encoder/
+      size_bytes: 4900000000
+      precision: bf16
+      format: safetensors
+      source:
+        type: huggingface
+        repo_id: Qwen/Qwen-Image-2.1
+        filename: text_encoder/model-00001-of-00004.safetensors
+        url: https://huggingface.co/Qwen/Qwen-Image-2.1/resolve/main/text_encoder/model-00001-of-00004.safetensors
+        mirror_url: https://hf-mirror.com/Qwen/Qwen-Image-2.1/resolve/main/text_encoder/model-00001-of-00004.safetensors
+      description: "Qwen3-VL 8B 编码器分片 1/4"
+    - id: qi21-te-shard2
+      role: text_encoder
+      filename: model-00002-of-00004.safetensors
+      target_dir: image/qwen-image-2.1/text_encoder/
+      size_bytes: 4900000000
+      precision: bf16
+      format: safetensors
+      source:
+        type: huggingface
+        repo_id: Qwen/Qwen-Image-2.1
+        filename: text_encoder/model-00002-of-00004.safetensors
+        url: https://huggingface.co/Qwen/Qwen-Image-2.1/resolve/main/text_encoder/model-00002-of-00004.safetensors
+        mirror_url: https://hf-mirror.com/Qwen/Qwen-Image-2.1/resolve/main/text_encoder/model-00002-of-00004.safetensors
+      description: "Qwen3-VL 8B 编码器分片 2/4"
+    - id: qi21-te-shard3
+      role: text_encoder
+      filename: model-00003-of-00004.safetensors
+      target_dir: image/qwen-image-2.1/text_encoder/
+      size_bytes: 4900000000
+      precision: bf16
+      format: safetensors
+      source:
+        type: huggingface
+        repo_id: Qwen/Qwen-Image-2.1
+        filename: text_encoder/model-00003-of-00004.safetensors
+        url: https://huggingface.co/Qwen/Qwen-Image-2.1/resolve/main/text_encoder/model-00003-of-00004.safetensors
+        mirror_url: https://hf-mirror.com/Qwen/Qwen-Image-2.1/resolve/main/text_encoder/model-00003-of-00004.safetensors
+      description: "Qwen3-VL 8B 编码器分片 3/4"
+    - id: qi21-te-shard4
+      role: text_encoder
+      filename: model-00004-of-00004.safetensors
+      target_dir: image/qwen-image-2.1/text_encoder/
+      size_bytes: 2706000000
+      precision: bf16
+      format: safetensors
+      source:
+        type: huggingface
+        repo_id: Qwen/Qwen-Image-2.1
+        filename: text_encoder/model-00004-of-00004.safetensors
+        url: https://huggingface.co/Qwen/Qwen-Image-2.1/resolve/main/text_encoder/model-00004-of-00004.safetensors
+        mirror_url: https://hf-mirror.com/Qwen/Qwen-Image-2.1/resolve/main/text_encoder/model-00004-of-00004.safetensors
+      description: "Qwen3-VL 8B 编码器分片 4/4"
+    # ---- RGBA VAE（共享一份，diffusers 目录格式）----
+    - id: qi21-vae
+      role: vae
+      filename: diffusion_pytorch_model.safetensors
+      target_dir: image/qwen-image-2.1/vae/
+      size_bytes: 1350000000
+      precision: bf16
+      format: safetensors
+      source:
+        type: huggingface
+        repo_id: Qwen/Qwen-Image-2.1
+        filename: vae/diffusion_pytorch_model.safetensors
+        url: https://huggingface.co/Qwen/Qwen-Image-2.1/resolve/main/vae/diffusion_pytorch_model.safetensors
+        mirror_url: https://hf-mirror.com/Qwen/Qwen-Image-2.1/resolve/main/vae/diffusion_pytorch_model.safetensors
+      description: "Qwen-Image-2.1 RGBA VAE（4 通道，原生透明，AutoencoderKLQwenImage21）"
+    - id: qi21-vae-config
+      role: vae
+      filename: config.json
+      target_dir: image/qwen-image-2.1/vae/
+      source:
+        type: huggingface
+        repo_id: Qwen/Qwen-Image-2.1
+        filename: vae/config.json
+        url: https://huggingface.co/Qwen/Qwen-Image-2.1/resolve/main/vae/config.json
+        mirror_url: https://hf-mirror.com/Qwen/Qwen-Image-2.1/resolve/main/vae/config.json
+    # ---- Qwen tokenizer/processor（共享一份；2.1 仓 tokenizer 文件位于 processor/ 下）----
+    - id: qi21-tok-vocab
+      role: tokenizer
+      filename: vocab.json
+      target_dir: image/qwen-image-2.1/processor/
+      source:
+        type: huggingface
+        repo_id: Qwen/Qwen-Image-2.1
+        filename: processor/vocab.json
+        url: https://huggingface.co/Qwen/Qwen-Image-2.1/resolve/main/processor/vocab.json
+        mirror_url: https://hf-mirror.com/Qwen/Qwen-Image-2.1/resolve/main/processor/vocab.json
+    - id: qi21-tok-merges
+      role: tokenizer
+      filename: merges.txt
+      target_dir: image/qwen-image-2.1/processor/
+      source:
+        type: huggingface
+        repo_id: Qwen/Qwen-Image-2.1
+        filename: processor/merges.txt
+        url: https://huggingface.co/Qwen/Qwen-Image-2.1/resolve/main/processor/merges.txt
+        mirror_url: https://hf-mirror.com/Qwen/Qwen-Image-2.1/resolve/main/processor/merges.txt
+    - id: qi21-tok-config
+      role: tokenizer
+      filename: tokenizer_config.json
+      target_dir: image/qwen-image-2.1/processor/
+      source:
+        type: huggingface
+        repo_id: Qwen/Qwen-Image-2.1
+        filename: processor/tokenizer_config.json
+        url: https://huggingface.co/Qwen/Qwen-Image-2.1/resolve/main/processor/tokenizer_config.json
+        mirror_url: https://hf-mirror.com/Qwen/Qwen-Image-2.1/resolve/main/processor/tokenizer_config.json
+    - id: qi21-tok-special
+      role: tokenizer
+      filename: special_tokens_map.json
+      target_dir: image/qwen-image-2.1/processor/
+      source:
+        type: huggingface
+        repo_id: Qwen/Qwen-Image-2.1
+        filename: processor/special_tokens_map.json
+        url: https://huggingface.co/Qwen/Qwen-Image-2.1/resolve/main/processor/special_tokens_map.json
+        mirror_url: https://hf-mirror.com/Qwen/Qwen-Image-2.1/resolve/main/processor/special_tokens_map.json
+    - id: qi21-tok-json
+      role: tokenizer
+      filename: tokenizer.json
+      target_dir: image/qwen-image-2.1/processor/
+      source:
+        type: huggingface
+        repo_id: Qwen/Qwen-Image-2.1
+        filename: processor/tokenizer.json
+        url: https://huggingface.co/Qwen/Qwen-Image-2.1/resolve/main/processor/tokenizer.json
+        mirror_url: https://hf-mirror.com/Qwen/Qwen-Image-2.1/resolve/main/processor/tokenizer.json
+    - id: qi21-tok-added
+      role: tokenizer
+      filename: added_tokens.json
+      target_dir: image/qwen-image-2.1/processor/
+      source:
+        type: huggingface
+        repo_id: Qwen/Qwen-Image-2.1
+        filename: processor/added_tokens.json
+        url: https://huggingface.co/Qwen/Qwen-Image-2.1/resolve/main/processor/added_tokens.json
+        mirror_url: https://hf-mirror.com/Qwen/Qwen-Image-2.1/resolve/main/processor/added_tokens.json
+    - id: qi21-proc-pre
+      role: tokenizer
+      filename: preprocessor_config.json
+      target_dir: image/qwen-image-2.1/processor/
+      source:
+        type: huggingface
+        repo_id: Qwen/Qwen-Image-2.1
+        filename: processor/preprocessor_config.json
+        url: https://huggingface.co/Qwen/Qwen-Image-2.1/resolve/main/processor/preprocessor_config.json
+        mirror_url: https://hf-mirror.com/Qwen/Qwen-Image-2.1/resolve/main/processor/preprocessor_config.json
+    - id: qi21-proc-video
+      role: tokenizer
+      filename: video_preprocessor_config.json
+      target_dir: image/qwen-image-2.1/processor/
+      source:
+        type: huggingface
+        repo_id: Qwen/Qwen-Image-2.1
+        filename: processor/video_preprocessor_config.json
+        url: https://huggingface.co/Qwen/Qwen-Image-2.1/resolve/main/processor/video_preprocessor_config.json
+        mirror_url: https://hf-mirror.com/Qwen/Qwen-Image-2.1/resolve/main/processor/video_preprocessor_config.json
+    - id: qi21-proc-chat
+      role: tokenizer
+      filename: chat_template.jinja
+      target_dir: image/qwen-image-2.1/processor/
+      source:
+        type: huggingface
+        repo_id: Qwen/Qwen-Image-2.1
+        filename: processor/chat_template.jinja
+        url: https://huggingface.co/Qwen/Qwen-Image-2.1/resolve/main/processor/chat_template.jinja
+        mirror_url: https://hf-mirror.com/Qwen/Qwen-Image-2.1/resolve/main/processor/chat_template.jinja
+    # ---- scheduler（共享一份）----
+    - id: qi21-scheduler
+      role: scheduler
+      filename: scheduler_config.json
+      target_dir: image/qwen-image-2.1/scheduler/
+      source:
+        type: huggingface
+        repo_id: Qwen/Qwen-Image-2.1
+        filename: scheduler/scheduler_config.json
+        url: https://huggingface.co/Qwen/Qwen-Image-2.1/resolve/main/scheduler/scheduler_config.json
+        mirror_url: https://hf-mirror.com/Qwen/Qwen-Image-2.1/resolve/main/scheduler/scheduler_config.json
+
+  loras:
+    scan_dir: image/qwen-image-2.1/loras/

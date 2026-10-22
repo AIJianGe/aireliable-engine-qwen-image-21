@@ -1,0 +1,27 @@
+# ============================================================
+# T3 GGUF Q4_K_M + W4A8 编码器（低配/极速档）
+# ------------------------------------------------------------
+# DiT GGUF Q4_K_M（~4.6GB）；编码器 W4A8 为二期（需 comfy-kitchen），
+# 一期先走 fp16 编码器保证可用性。
+# ============================================================
+scheme: t3_gguf_q4
+name: "T3 GGUF Q4_K_M + 编码器（低配/极速）"
+description: >-
+  DiT GGUF Q4_K_M（~4.6GB）+ 编码器 fp16（W4A8 为二期）。权重合计 ~9.3GB，
+  面向低显存机器；本机 48GB 其实用不上，保留档位以适配他人。
+default: false
+vram_required: "22GB"      # 任务 55 校准：实测 ≈ 21.7GB（编码器 fp16 常驻占大头，原 12GB 低估）
+
+quantization:
+  backend_type: gguf
+  dit_dtype: q4_k_m
+  compute_dtype: fp32        # 强制 fp32
+  encoder_dtype: fp16        # W4A8 二期（comfy-kitchen）
+  vae_dtype: fp32
+
+inference:
+  steps: 40
+  guidance: 1.0
+
+applicable_variants:
+  - qwen-image-21-official-gguf-q4

@@ -1,0 +1,30 @@
+# ============================================================
+# T2 GGUF Q8_0 + 编码器（★ 本机主力）
+# ------------------------------------------------------------
+# DiT 社区 GGUF Q8_0（from_single_file + GGUFQuantizationConfig），
+# compute=fp32（GGUF 反量化溢出防护，项目规则 §2 铁律①——不可改 fp16）。
+# 编码器：先 fp16（零依赖，沿用 7007 引擎已验证配方）；INT8 为二期增强。
+# ============================================================
+scheme: t2_gguf_q8
+name: "T2 GGUF Q8_0 + 编码器（★ 主力）"
+description: >-
+  本机 48GB 主力档：DiT GGUF Q8_0（compute=fp32），编码器 fp16（可选 INT8）。
+  沿用既有 7007 引擎已验证配方；~27GB 常驻，余量极大。
+default: true
+vram_required: "25GB"      # 任务 55 校准：实测 ≈ 25.0GB（原 20GB 低估）
+
+quantization:
+  backend_type: gguf
+  dit_dtype: q8_0
+  compute_dtype: fp32        # 强制 fp32（GGUF 反量化溢出防护）
+  encoder_dtype: fp16
+  vae_dtype: fp32
+
+inference:
+  steps: 40
+  guidance: 1.0
+
+applicable_variants:
+  - qwen-image-21-official-gguf-q8
+  - qwen-image-21-turbo-gguf-q8
+  - qwen-image-21-uncensored-gguf-q8
