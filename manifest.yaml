@@ -34,7 +34,7 @@
 # ===== v0.1 必需字段 =====
 engine_id: qwen_image_21_feeb8130
 engine_name: Qwen-Image2.1
-engine_version: 0.1.0
+engine_version: 1.0.0
 aireliable_compat: ">=0.0.16"
 uv_env_name: image-qwen-image-21
 export_mode: source
@@ -89,8 +89,8 @@ source:
   branch: main
 
 upgrade:
-  check_url: https://api.github.com/repos/QwenLM/Qwen-Image/releases/latest
-  auto_check: false
+  check_url: https://api.github.com/repos/AIJianGe/aireliable-engine-qwen-image-21/releases/latest
+  auto_check: true
 
 node_packages: []
 
@@ -320,6 +320,7 @@ models:
       role: text_encoder
       filename: config.json
       target_dir: image/qwen-image-2.1/text_encoder/
+      size_bytes: 1517
       source:
         type: huggingface
         repo_id: Qwen/Qwen-Image-2.1
@@ -330,6 +331,7 @@ models:
       role: text_encoder
       filename: model.safetensors.index.json
       target_dir: image/qwen-image-2.1/text_encoder/
+      size_bytes: 67795
       source:
         type: huggingface
         repo_id: Qwen/Qwen-Image-2.1
@@ -411,6 +413,7 @@ models:
       role: vae
       filename: config.json
       target_dir: image/qwen-image-2.1/vae/
+      size_bytes: 2079
       source:
         type: huggingface
         repo_id: Qwen/Qwen-Image-2.1
@@ -422,6 +425,7 @@ models:
       role: tokenizer
       filename: vocab.json
       target_dir: image/qwen-image-2.1/processor/
+      size_bytes: 2776833
       source:
         type: huggingface
         repo_id: Qwen/Qwen-Image-2.1
@@ -432,6 +436,7 @@ models:
       role: tokenizer
       filename: merges.txt
       target_dir: image/qwen-image-2.1/processor/
+      size_bytes: 1671853
       source:
         type: huggingface
         repo_id: Qwen/Qwen-Image-2.1
@@ -442,6 +447,7 @@ models:
       role: tokenizer
       filename: tokenizer_config.json
       target_dir: image/qwen-image-2.1/processor/
+      size_bytes: 5445
       source:
         type: huggingface
         repo_id: Qwen/Qwen-Image-2.1
@@ -452,6 +458,7 @@ models:
       role: tokenizer
       filename: special_tokens_map.json
       target_dir: image/qwen-image-2.1/processor/
+      size_bytes: 613
       source:
         type: huggingface
         repo_id: Qwen/Qwen-Image-2.1
@@ -462,6 +469,7 @@ models:
       role: tokenizer
       filename: tokenizer.json
       target_dir: image/qwen-image-2.1/processor/
+      size_bytes: 11422654
       source:
         type: huggingface
         repo_id: Qwen/Qwen-Image-2.1
@@ -472,6 +480,7 @@ models:
       role: tokenizer
       filename: added_tokens.json
       target_dir: image/qwen-image-2.1/processor/
+      size_bytes: 707
       source:
         type: huggingface
         repo_id: Qwen/Qwen-Image-2.1
@@ -482,6 +491,7 @@ models:
       role: tokenizer
       filename: preprocessor_config.json
       target_dir: image/qwen-image-2.1/processor/
+      size_bytes: 782
       source:
         type: huggingface
         repo_id: Qwen/Qwen-Image-2.1
@@ -492,6 +502,7 @@ models:
       role: tokenizer
       filename: video_preprocessor_config.json
       target_dir: image/qwen-image-2.1/processor/
+      size_bytes: 817
       source:
         type: huggingface
         repo_id: Qwen/Qwen-Image-2.1
@@ -502,6 +513,7 @@ models:
       role: tokenizer
       filename: chat_template.jinja
       target_dir: image/qwen-image-2.1/processor/
+      size_bytes: 5292
       source:
         type: huggingface
         repo_id: Qwen/Qwen-Image-2.1
@@ -513,6 +525,7 @@ models:
       role: scheduler
       filename: scheduler_config.json
       target_dir: image/qwen-image-2.1/scheduler/
+      size_bytes: 485
       source:
         type: huggingface
         repo_id: Qwen/Qwen-Image-2.1
