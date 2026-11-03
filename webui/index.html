@@ -155,6 +155,11 @@
   <!-- 任务 56-V2：静态资源带版本号 —— 浏览器会把同名 app.js 存进内存缓存
        （实测 transferSize=0，改了 app.js 后页面仍跑旧代码），加 ?v= 强制取新文件。
        改动 app.js / style.css 时**必须同步递进该版本号**。 -->
+  <!-- 模型清单（SDK 共享组件：GET /models，与平台「引擎详情 → 模型管理」同口径） -->
+  <section id="model-inventory-wrap" style="width:calc(100% - 32px);max-width:1280px;margin:16px auto;padding:10px 16px;box-sizing:border-box;border:1px solid rgba(128,128,128,.25);border-radius:10px;background:rgba(128,128,128,.05);">
+    <div id="sdk-model-inventory"></div>
+  </section>
+  <script src="/sdk/model-inventory.js?v=0.5.0"></script>
   <script src="app.js?v=56v3"></script>
 </body>
 </html>

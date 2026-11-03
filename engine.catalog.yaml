@@ -1,0 +1,45 @@
+# 开源引擎中心展示元数据（任务 80 / T4.1）
+schema: 1
+engine_id: qwen_image_21_feeb8130
+
+name:
+  zh: "Qwen-Image 2.1 图像生成"
+  en: "Qwen-Image 2.1"
+
+description:
+  zh: "Qwen-Image 2.1 文生图引擎：原生 2K 输出与 RGBA 透明通道，提供 BF16 / GGUF Q8 / Q4 / INT8 四档精度。"
+  en: "Qwen-Image 2.1 text-to-image engine with native 2K output, RGBA transparency and BF16 / GGUF / INT8 precision tiers."
+
+category: image
+tags:
+  - text-to-image
+  - 2k
+  - transparency
+
+repository:
+  github: AIJianGe/aireliable-engine-qwen-image-21
+  gitee: AIJianGe/aireliable-engine-qwen-image-21
+
+cover: catalog/covers/qwen_image_21_feeb8130.webp
+
+requirements:
+  min_vram_gb: 20
+  python: ">=3.10,<3.13"
+  torch: ">=2.5.0"
+  gpu: required
+
+license: PolyForm-Noncommercial-1.0.0
+
+description_long:
+  zh: |-
+    Qwen-Image 2.1 是文生图引擎，支持原生 2K 分辨率直出，不必先生成低分辨率再放大；同时可直接生成带 RGBA 透明通道的素材，省去后期抠图。
+
+    目录提供 BF16、GGUF Q8、GGUF Q4、INT8 四档精度：BF16 画质优先，Q8 在画质与显存之间平衡，Q4 与 INT8 面向显存受限设备，出图速度更快。
+
+    推荐 20GB 以上显存。对 2K 直出、透明通道与中文文案有需求的海报、电商、UI 与游戏美术场景优先选择本引擎。
+  en: |-
+    Qwen-Image 2.1 is a text-to-image engine that renders natively at 2K without a low-resolution upscale pass, and can output assets with an RGBA alpha channel directly, removing manual cut-out work.
+
+    Four precision tiers are available: BF16, GGUF Q8, GGUF Q4 and INT8. BF16 favours quality, Q8 balances quality and memory, while Q4 and INT8 target memory-constrained devices with faster generation.
+
+    20GB+ VRAM is recommended. It is the first choice for posters, e-commerce, UI and game-art workflows that need native 2K output, transparency or Chinese typography.

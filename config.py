@@ -16,6 +16,8 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from aireliable_engine import EngineConfig as BaseEngineConfig
+
 # ===== 常量 =====
 
 ENGINE_ID = "qwen_image_21_feeb8130"
@@ -48,22 +50,15 @@ MODEL_SUBDIR = _resolve_model_subdir()
 
 
 @dataclass
-class EngineConfig:
+class EngineConfig(BaseEngineConfig):
     """Qwen-Image-2.1 图像引擎运行配置。"""
 
-    # ===== 基础 =====
+    # ===== 基础（身份 / 端口默认值由本引擎覆盖，其余公共字段见基类）=====
     engine_id: str = ENGINE_ID
     engine_name: str = ENGINE_NAME
     capability: str = CAPABILITY
     engine_type: str = ENGINE_TYPE
     port: int = DEFAULT_PORT
-    host: str = "127.0.0.1"
-
-    # ===== 路径 =====
-    models_root: Path = Path("models")
-    data_root: Path = Path("data")
-    project_root: Path = Path(".")
-    output_root: Path = Path("output")
 
     # ===== 推导路径 =====
     model_dir: Path = field(init=False)
@@ -72,18 +67,11 @@ class EngineConfig:
     input_dir: Path = field(init=False)
     schemes_dir: Path = field(init=False)
 
-    # ===== 设备 =====
-    device: str = "auto"
-    device_policy: str = "auto"
-
     # ===== 精度档位（4 档 T1–T4）=====
     # 用户/UI 显式指定的运行精度；auto = 由 DtypeResolver 按显卡自适应
     precision: str = "auto"
     # 默认精度档（未显式指定 variant/scheme 时使用）
     default_scheme: str = DEFAULT_SCHEME
-
-    # ===== 日志 =====
-    log_level: str = "INFO"
 
     def __post_init__(self) -> None:
         """推导子路径。"""

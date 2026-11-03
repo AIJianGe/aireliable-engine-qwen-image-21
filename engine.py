@@ -636,10 +636,14 @@ class QwenImage21Engine(CustomEngine):
     # ============================================================
 
     async def _load_lora_impl(self, name: str, weight: float) -> LoraLoadResponse:
-        raise EngineLoadError("LoRA 支持为二期功能（任务文档 S3.4 / 分析文档 §7）")
+        # 保留迁移前的 HTTP 501 语义（原 server.py 把所有异常映射为 501），
+        # 与 foleycrafter 等引擎的「不支持 → HTTPException(501)」写法一致
+        from fastapi import HTTPException
+        raise HTTPException(status_code=501, detail="LoRA 支持为二期功能（任务文档 S3.4 / 分析文档 §7）")
 
     async def _unload_lora_impl(self, name: str) -> LoraUnloadResponse:
-        raise EngineLoadError("LoRA 支持为二期功能（任务文档 S3.4 / 分析文档 §7）")
+        from fastapi import HTTPException
+        raise HTTPException(status_code=501, detail="LoRA 支持为二期功能（任务文档 S3.4 / 分析文档 §7）")
 
     # ============================================================
     # 扩展：scheme 目录 / 历史

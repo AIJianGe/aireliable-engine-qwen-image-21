@@ -51,7 +51,9 @@ def test_webui_mounted(app):
 
 
 def test_all_sdk_endpoints_registered(app):
-    paths = {getattr(r, "path", None) for r in app.routes}
+    # 任务 71 T3.6：骨架用 include_router 注册扩展路由，新版 FastAPI 的
+    # app.routes 不再展开被 include 的子路由 → 改用 OpenAPI 路径表核对
+    paths = set(app.openapi()["paths"])
     for ep in SDK_ENDPOINTS + EXTRA_ENDPOINTS:
         assert ep in paths, f"缺少端点 {ep}"
 
