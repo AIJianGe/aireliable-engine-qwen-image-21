@@ -134,6 +134,7 @@
         <div class="empty">尚未生成</div>
       </div>
       <div id="compare" hidden>
+        <div class="cmp-head"><span>原图</span><span class="cmp-tip">拖动滑块对比</span><span>结果</span></div>
         <div class="cmp-wrap">
           <img id="cmp-before" alt="before" />
           <img id="cmp-after" alt="after" />
@@ -144,6 +145,7 @@
       <div class="progress-wrap"><div class="progress" id="progress"></div></div>
       <div class="hint" id="stage"></div>
       <div class="row">
+        <button class="ghost" id="compare-btn" hidden>对比原图</button>
         <button class="ghost" id="reuse-btn" hidden>以此图继续编辑</button>
         <button class="ghost" id="download-btn" hidden>下载</button>
       </div>
@@ -159,7 +161,15 @@
   <section id="model-inventory-wrap" style="width:calc(100% - 32px);max-width:1280px;margin:16px auto;padding:10px 16px;box-sizing:border-box;border:1px solid rgba(128,128,128,.25);border-radius:10px;background:rgba(128,128,128,.05);">
     <div id="sdk-model-inventory"></div>
   </section>
+  <!-- 详情图查看器：点击结果图 / 历史图打开大图 -->
+  <div class="lightbox" id="lightbox" hidden>
+    <button class="lightbox-close" id="lightbox-close" aria-label="关闭">✕</button>
+    <img id="lightbox-img" alt="detail" />
+    <div class="lightbox-bar">
+      <a class="ghost" id="lightbox-download" download>下载原图</a>
+    </div>
+  </div>
   <script src="/sdk/model-inventory.js?v=0.5.0"></script>
-  <script src="app.js?v=56v3"></script>
+  <script src="app.js?v=56v4"></script>
 </body>
 </html>

@@ -122,6 +122,35 @@ button.ratio { padding: 4px 10px; font-size: 12px; }
 .cmp-wrap #cmp-after { position: absolute; inset: 0; }
 .cmp-line { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--accent); pointer-events: none; }
 #cmp-range { width: 100%; margin-top: 6px; }
+.cmp-head {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 12px; color: var(--muted); margin-bottom: 6px;
+}
+.cmp-tip { color: var(--accent); }
+
+/* ===== 详情图查看器 ===== */
+.lightbox {
+  position: fixed; inset: 0; z-index: 999;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(4, 6, 10, .88);
+  backdrop-filter: blur(2px);
+}
+.lightbox[hidden] { display: none !important; }
+.lightbox img {
+  max-width: 92vw; max-height: 84vh; object-fit: contain;
+  border-radius: 8px; box-shadow: 0 12px 40px rgba(0, 0, 0, .6);
+  background: #101216;
+}
+.lightbox-close {
+  position: absolute; top: 18px; right: 22px;
+  width: 36px; height: 36px; border-radius: 50%;
+  border: 1px solid var(--border); background: rgba(20, 24, 32, .9);
+  color: #fff; font-size: 16px; cursor: pointer;
+}
+.lightbox-bar {
+  position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 10px;
+}
 .progress-wrap { height: 6px; background: var(--panel-2); border-radius: 6px; margin-top: 10px; overflow: hidden; }
 .progress { height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--accent-2)); transition: width .2s; }
 .hint { color: var(--muted); font-size: 12px; margin-top: 6px; min-height: 16px; }

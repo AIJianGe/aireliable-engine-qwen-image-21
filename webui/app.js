@@ -620,17 +620,35 @@
 
   function showResult(url) {
     lastResultUrl = url;
-    $("preview").innerHTML = `<img src="${url}" alt="result" />`;
+    $("preview").innerHTML = `<img src="${url}" alt="result" title="点击查看大图" />`;
     $("download-btn").hidden = false;
     $("reuse-btn").hidden = false;
     if (lastBeforeUrl) {
       $("compare").hidden = false;
+      $("compare-btn").hidden = false;
+      $("compare-btn").textContent = "收起对比";
       $("cmp-before").src = lastBeforeUrl;
       $("cmp-after").src = url;
       updateCompare(Number($("cmp-range").value));
     } else {
       $("compare").hidden = true;
+      $("compare-btn").hidden = true;
     }
+  }
+
+  // ===== 详情图查看器（点击结果图 / 历史图查看大图） =====
+  function openLightbox(url) {
+    if (!url) return;
+    const dl = $("lightbox-download");
+    $("lightbox-img").src = url;
+    dl.href = url;
+    dl.download = url.split("/").pop() || "result.png";
+    $("lightbox").hidden = false;
+  }
+
+  function closeLightbox() {
+    $("lightbox").hidden = true;
+    $("lightbox-img").removeAttribute("src");
   }
 
   function updateCompare(v) {
@@ -715,9 +733,34 @@
   $("undo-btn").addEventListener("click", () => { circles.pop(); drawCanvas(); });
   $("clear-btn").addEventListener("click", () => { resetCircles(); drawCanvas(); });
   $("cmp-range").addEventListener("input", (e) => updateCompare(Number(e.target.value)));
+  $("compare-btn").addEventListener("click", () => {
+    if ($("compare").hidden) {
+      $("compare").hidden = false;
+      updateCompare(Number($("cmp-range").value));
+      $("compare-btn").textContent = "收起对比";
+    } else {
+      $("compare").hidden = true;
+      $("compare-btn").textContent = "对比原图";
+    }
+  });
+  $("preview").addEventListener("click", (e) => {
+    const img = e.target.closest("img");
+    if (img) openLightbox(img.getAttribute("src"));
+  });
+  $("lightbox-close").addEventListener("click", closeLightbox);
+  $("lightbox").addEventListener("click", (e) => {
+    if (e.target.id === "lightbox") closeLightbox();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !$("lightbox").hidden) closeLightbox();
+  });
   $("history").addEventListener("click", (e) => {
     const img = e.target.closest("img");
-    if (img) showResult(img.getAttribute("data-url"));
+    if (img) {
+      const url = img.getAttribute("data-url");
+      showResult(url);
+      openLightbox(url);
+    }
   });
 
   // 上传：点击 / 拖拽 / 粘贴
