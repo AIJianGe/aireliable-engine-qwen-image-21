@@ -34,7 +34,7 @@
 # ===== v0.1 必需字段 =====
 engine_id: qwen_image_21_feeb8130
 engine_name: Qwen-Image2.1
-engine_version: 1.0.1
+engine_version: 1.0.2
 aireliable_compat: ">=0.0.16"
 uv_env_name: image-qwen-image-21
 export_mode: source
